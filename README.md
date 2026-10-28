@@ -1,22 +1,24 @@
 # Radio Chess Tracker
 
-A simple Flask web app for keeping track of a chess game played over the radio. Enter each move by dragging pieces on the board or by typing it in standard notation (e.g. `e4`, `Nf3`), and step back and forward through the game as needed.
+A Flask web app for recording and reviewing chess games played over the radio. Enter moves by dragging pieces on the interactive board or by typing standard algebraic notation (SAN), such as `e4`, `Nf3`, or `O-O`.
 
 ## Features
 
-- Interactive chessboard with legal-move highlighting
-- Manual move entry (SAN) for moves received by voice
-- Move history list
-- Back / Forward navigation through the game
-- Multiple games in parallel: create, switch between, and delete games from the UI
-- Each game is saved automatically (atomic write) as `games/<name>.pgn`; the last-open game is reopened on startup, so a Pi reset or restart loses nothing
-- An existing `radio_games.pgn` is imported automatically on first run
+- Interactive chessboard with legal-move highlighting and turn-aware piece dragging
+- Manual SAN move entry for moves received by voice
+- Move history and Back / Forward navigation
+- Multiple games: create games, switch between them, and permanently delete the open game
+- Editable PGN details: Event, Site, Date, Round, White, Black, and Result
+- Automatic PGN saving after moves and detail edits, using a temporary file and atomic replacement
+- Reopens the last active game on startup; if that game is unavailable, opens the most recently modified saved game
+- Creates a default `Game 1` if there are no saved games
+- Migrates `radio_games.pgn` to `games/legacy-game.pgn` when the games folder contains no saved PGN games
 
 ## Requirements
 
-- Python 3.8+
-- Python packages: `flask`, `chess` (python-chess)
-- Internet access in the browser (jQuery, chessboard.js, chess.js and piece images are loaded from CDNs)
+- Python 3.8 or later
+- Python packages: Flask and python-chess (installed as `flask` and `chess`)
+- Internet access in the browser: jQuery, Chessboard.js, Chess.js, and chess piece images are loaded from CDNs
 
 ## Setup
 
@@ -29,13 +31,13 @@ python -m venv venv
 pip install flask chess
 ```
 
-If PowerShell blocks the activation script, run once:
+If PowerShell blocks the activation script, run this once:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
-In Command Prompt, activate with `venv\Scripts\activate.bat` instead.
+In Command Prompt, activate the environment with `venv\Scripts\activate.bat`.
 
 ### Raspberry Pi (Raspberry Pi OS)
 
@@ -48,7 +50,7 @@ source venv/bin/activate
 pip install flask chess
 ```
 
-### Leaving the virtual environment
+To leave the virtual environment:
 
 ```bash
 deactivate
@@ -63,22 +65,25 @@ python app.py        # Windows
 python3 app.py       # Raspberry Pi
 ```
 
-Open <http://localhost:5000> in a browser. The server listens on all interfaces (`0.0.0.0:5000`), so other devices on your network can use it at `http://<host-ip>:5000`. On a Raspberry Pi, find its IP with `hostname -I`.
+Open <http://localhost:5000> in a browser. The server listens on all network interfaces at port 5000, so other devices on the same network can connect at `http://<host-ip>:5000`. On a Raspberry Pi, find its IP address with `hostname -I`.
 
-> **Note:** The app has no authentication and runs Flask's development server. Use it only on a trusted local network.
+> **Note:** The app has no authentication and uses Flask's development server. Run it only on a trusted local network.
 
 ## Usage
 
-1. Make a move by dragging a piece, or type it in the box (e.g. `e4`, `Nf3`, `O-O`) and click **Manual Enter**.
-2. Use **< Back** and **Forward >** to review the game. Making a different move from an earlier position replaces the moves after it.
-3. Use the dropdown to switch to another game; enter a name and opponent/callsign and click **New Game** to start another. **Delete This Game** permanently removes the open game.
+1. Make a move by dragging a piece or enter a SAN move in the text box and select **Manual Enter**.
+2. Select **Back** and **Forward** to navigate the saved line. If you enter a different move from an earlier position, the existing continuation from that position is replaced.
+3. Use the game dropdown to switch games. Enter a game name and optional opponent/callsign, then select **New Game** to create one.
+4. Expand **Edit game details** to update the PGN headers, including the result, then select **Save Details**.
+5. Select **Delete This Game** to permanently remove the open game's PGN. The app opens another saved game afterward, or creates a new `Game 1` if none remain.
 
-Illegal or unparseable manual moves are silently ignored. Pawn promotions made by dragging always promote to a queen; to promote to another piece, type the move manually (e.g. `e8=N`).
+Illegal or unparseable manual moves are ignored without an on-screen error. Drag-and-drop promotions default to a queen; to promote to another piece, enter the move manually in SAN (for example, `e8=N`).
 
-## Files
+## Saved files
 
 | File | Purpose |
 |------|---------|
-| `app.py` | The Flask application and HTML template |
-| `games/*.pgn` | One saved PGN per game (created automatically) |
-| `games/active.txt` | Which game was open last |
+| `app.py` | Flask application and embedded HTML/JavaScript interface |
+| `games/<game-id>.pgn` | One PGN file per saved game |
+| `games/active.txt` | ID of the game to reopen on startup |
+| `radio_games.pgn` | Legacy single-game save file, migrated when there are no saved game PGNs |
