@@ -1,25 +1,131 @@
 import chess
 import chess.pgn
+import datetime
 import os
+import re
+import shutil
 from flask import Flask, redirect, render_template_string, request
 
 app = Flask(__name__)
-PGN_FILE = "radio_games.pgn"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+GAMES_DIR = os.path.join(BASE_DIR, "games")
+ACTIVE_FILE = os.path.join(GAMES_DIR, "active.txt")
+LEGACY_PGN = os.path.join(BASE_DIR, "radio_games.pgn")
 
-# Global state to track the game history
+# State for the currently open game (each game is one PGN file in GAMES_DIR)
 game = chess.pgn.Game()
 current_node = game
+active_id = None
 
-def load_game():
-    global game, current_node
-    if os.path.exists(PGN_FILE):
-        with open(PGN_FILE) as f:
-            loaded_game = chess.pgn.read_game(f)
-            if loaded_game:
-                game = loaded_game
-                current_node = game.end()
 
-load_game()
+def game_path(game_id):
+    return os.path.join(GAMES_DIR, game_id + ".pgn")
+
+
+def slugify(text):
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", text).strip("-").lower()
+    return slug[:50] or "game"
+
+
+def valid_id(game_id):
+    return bool(game_id) and re.fullmatch(r"[a-z0-9_-]+", game_id) is not None \
+        and os.path.exists(game_path(game_id))
+
+
+def atomic_write(path, text):
+    # Write to a temp file then replace, so a power loss can't corrupt the save
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
+def save_game():
+    if active_id:
+        atomic_write(game_path(active_id), str(game) + "\n")
+
+
+def save_active_id():
+    atomic_write(ACTIVE_FILE, active_id or "")
+
+
+def list_games():
+    games = []
+    for name in sorted(os.listdir(GAMES_DIR)):
+        if not name.endswith(".pgn"):
+            continue
+        gid = name[:-4]
+        try:
+            with open(game_path(gid)) as f:
+                g = chess.pgn.read_game(f)
+        except Exception:
+            continue
+        if g is None:
+            continue
+        plies = sum(1 for _ in g.mainline_moves())
+        games.append({
+            "id": gid,
+            "title": g.headers.get("Event", gid),
+            "opponent": g.headers.get("Black", ""),
+            "plies": plies,
+            "mtime": os.path.getmtime(game_path(gid)),
+        })
+    games.sort(key=lambda x: x["mtime"], reverse=True)
+    return games
+
+
+def create_game(title, opponent=""):
+    base = slugify(title)
+    gid, n = base, 2
+    while os.path.exists(game_path(gid)):
+        gid = f"{base}-{n}"
+        n += 1
+    g = chess.pgn.Game()
+    g.headers["Event"] = title or "Radio Game"
+    g.headers["Site"] = "HAM Radio"
+    g.headers["Date"] = datetime.date.today().strftime("%Y.%m.%d")
+    g.headers["White"] = "Me"
+    g.headers["Black"] = opponent or "?"
+    atomic_write(game_path(gid), str(g) + "\n")
+    return gid
+
+
+def open_game(game_id):
+    global game, current_node, active_id
+    with open(game_path(game_id)) as f:
+        loaded = chess.pgn.read_game(f)
+    game = loaded or chess.pgn.Game()
+    current_node = game.end()
+    active_id = game_id
+    save_active_id()
+
+
+def init_games():
+    os.makedirs(GAMES_DIR, exist_ok=True)
+    # Migrate the old single-game save file
+    if os.path.exists(LEGACY_PGN) and not list_games():
+        shutil.move(LEGACY_PGN, game_path("legacy-game"))
+        with open(game_path("legacy-game")) as f:
+            g = chess.pgn.read_game(f)
+        if g is not None:
+            g.headers["Event"] = "Imported game"
+            atomic_write(game_path("legacy-game"), str(g) + "\n")
+    saved = ""
+    if os.path.exists(ACTIVE_FILE):
+        with open(ACTIVE_FILE) as f:
+            saved = f.read().strip()
+    games = list_games()
+    if valid_id(saved):
+        open_game(saved)
+    elif games:
+        open_game(games[0]["id"])
+    else:
+        open_game(create_game("Game 1"))
+
+
+init_games()
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -55,6 +161,7 @@ TEMPLATE = """
 </head>
 <body>
   <h2 style="text-align: center; margin-top: 0;">Radio Chess Station</h2>
+  <h3 style="text-align: center; margin-top: 0;">{{ title }}{% if opponent and opponent != '?' %} vs {{ opponent }}{% endif %}</h3>
   <div class="app-container">
     
     <div class="board-col">
@@ -79,8 +186,47 @@ TEMPLATE = """
         <button type="submit">Manual Enter</button>
       </form>
       
-      <form action="/reset" method="post" onsubmit="return confirm('Reset board? This will delete the game history.');" style="margin-top: 20px;">
-        <button type="submit" style="color: red;">New Game</button>
+      <hr>
+      <form action="/load" method="post" style="margin-bottom: 10px;">
+        <select name="game_id" onchange="this.form.submit()">
+          {% for g in games %}
+            <option value="{{ g.id }}" {{ 'selected' if g.id == active_id else '' }}>
+              {{ g.title }}{% if g.opponent and g.opponent != '?' %} vs {{ g.opponent }}{% endif %} ({{ (g.plies + 1) // 2 }} moves)
+            </option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit">Load</button></noscript>
+      </form>
+
+      <form action="/new" method="post">
+        <input type="text" name="title" placeholder="Game name" style="width:110px;">
+        <input type="text" name="opponent" placeholder="Opponent/callsign" style="width:110px;">
+        <button type="submit">New Game</button>
+      </form>
+
+      <details style="margin-top: 15px; text-align: left;">
+        <summary style="cursor: pointer;">Edit game details</summary>
+        <form action="/headers" method="post">
+          {% for key in header_fields %}
+            <div style="margin-top: 6px;">
+              <label style="display:inline-block; width:60px;">{{ key }}</label>
+              {% if key == 'Result' %}
+                <select name="{{ key }}">
+                  {% for r in ['*', '1-0', '0-1', '1/2-1/2'] %}
+                    <option value="{{ r }}" {{ 'selected' if headers[key] == r else '' }}>{{ r }}</option>
+                  {% endfor %}
+                </select>
+              {% else %}
+                <input type="text" name="{{ key }}" value="{{ headers[key] }}" style="width:200px;">
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" style="margin-top: 8px;">Save Details</button>
+        </form>
+      </details>
+
+      <form action="/delete" method="post" onsubmit="return confirm('Delete this game permanently?');" style="margin-top: 15px;">
+        <button type="submit" style="color: red;">Delete This Game</button>
       </form>
 
       <!-- Hidden form triggered by drag-and-drop -->
@@ -226,8 +372,32 @@ def index():
         board=board,
         can_back=can_back,
         can_forward=can_forward,
-        history=history
+        history=history,
+        games=list_games(),
+        active_id=active_id,
+        title=game.headers.get("Event", active_id),
+        opponent=game.headers.get("Black", ""),
+        header_fields=HEADER_FIELDS,
+        headers={k: game.headers.get(k, "") for k in HEADER_FIELDS}
     )
+
+HEADER_FIELDS = ["Event", "Site", "Date", "Round", "White", "Black", "Result"]
+
+
+@app.route("/headers", methods=["POST"])
+def update_headers():
+    for key in HEADER_FIELDS:
+        if key not in request.form:
+            continue
+        value = " ".join(request.form[key].split()).replace('"', "'")
+        if key == "Result":
+            if value not in ("*", "1-0", "0-1", "1/2-1/2"):
+                value = "*"
+        elif not value:
+            value = "?"
+        game.headers[key] = value
+    save_game()
+    return redirect("/")
 
 @app.route("/move", methods=["POST"])
 def move():
@@ -243,8 +413,7 @@ def move():
         else:
             current_node = current_node.variation(parsed_move)
 
-        with open(PGN_FILE, "w") as f:
-            f.write(str(game))
+        save_game()
     except Exception:
         pass
     return redirect("/")
@@ -263,13 +432,30 @@ def forward():
         current_node = current_node.variations[0]
     return redirect("/")
 
-@app.route("/reset", methods=["POST"])
-def reset():
-    global game, current_node
-    game = chess.pgn.Game()
-    current_node = game
-    if os.path.exists(PGN_FILE):
-        os.remove(PGN_FILE)
+@app.route("/new", methods=["POST"])
+def new_game():
+    title = request.form.get("title", "").strip()
+    opponent = request.form.get("opponent", "").strip()
+    if not title:
+        title = f"Game {len(list_games()) + 1}"
+    open_game(create_game(title, opponent))
+    return redirect("/")
+
+
+@app.route("/load", methods=["POST"])
+def load():
+    game_id = request.form.get("game_id", "")
+    if valid_id(game_id):
+        open_game(game_id)
+    return redirect("/")
+
+
+@app.route("/delete", methods=["POST"])
+def delete():
+    if active_id and valid_id(active_id):
+        os.remove(game_path(active_id))
+    remaining = list_games()
+    open_game(remaining[0]["id"] if remaining else create_game("Game 1"))
     return redirect("/")
 
 if __name__ == "__main__":
