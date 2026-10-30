@@ -4,3 +4,17 @@ venv/
 .venv/
 games/
 radio_games.pgn
+
+# Android / Gradle build output and local config
+android/.gradle/
+android/.kotlin/
+android/.idea/
+android/**/build/
+android/**/.cxx/
+android/local.properties
+android/captures/
+*.iml
+
+# Keep only the released APK in the repo root
+*.apk
+!Radio-Chess_v1.apk

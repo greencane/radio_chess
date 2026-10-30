@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple pawn silhouette inside the adaptive-icon safe zone -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,38C46,46 46,54 49,60L40,60L40,66L68,66L68,60L59,60C62,54 62,46 54,38Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,70L72,70L72,78L36,78Z" />
+</vector>

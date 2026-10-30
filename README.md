@@ -2,6 +2,8 @@
 
 A Flask web app for recording and reviewing chess games played over the radio. Enter moves by dragging pieces on the interactive board or by typing standard algebraic notation (SAN), such as `e4`, `Nf3`, or `O-O`.
 
+The project also includes a standalone **Android app** (see [Android app](#android-app)) that works fully offline, with no server required.
+
 ## Features
 
 - Interactive chessboard with legal-move highlighting and turn-aware piece dragging
@@ -79,11 +81,48 @@ Open <http://localhost:5000> in a browser. The server listens on all network int
 
 Illegal or unparseable manual moves are ignored without an on-screen error. Drag-and-drop promotions default to a queen; to promote to another piece, enter the move manually in SAN (for example, `e8=N`).
 
+## Android app
+
+`Radio-Chess_v1.apk` in the repository root is a prebuilt, debug-signed Android build of Radio Chess. It has the same features and layout as the web app, but runs entirely on the phone: no Flask server, no Python, and no internet connection (the chess libraries and piece images are bundled).
+
+### Install
+
+1. Copy `Radio-Chess_v1.apk` to the phone (USB, cloud drive, etc.) and open it, allowing "Install unknown apps" for the file manager if prompted. Alternatively, with USB debugging enabled: `adb install Radio-Chess_v1.apk`.
+2. Open **Radio Chess**. Requires Android 8.0 (API 26) or later.
+
+### Usage notes
+
+- Usage is the same as the web app (see [Usage](#usage)): drag pieces or type SAN moves, navigate with Back/Forward, manage multiple games, and edit PGN details.
+- Dragging a piece highlights its legal destination squares.
+- Games are saved automatically as PGN files in the app's private storage (`games/<game-id>.pgn` and `games/active.txt`), using the same atomic write and reopen-last-game behavior as the desktop app. They are removed if the app is uninstalled; the games are not synced with the PC version.
+
+### How it is built
+
+The Android project is in [`android/`](android). It is a Kotlin app whose single screen is a `WebView` that loads the bundled web UI from `android/app/src/main/assets/` (`index.html`, `app.js`, plus jQuery, Chessboard.js, Chess.js, and piece images in `lib/` and `img/`). `MainActivity.kt` also provides the PGN file storage that the JavaScript calls into. The game logic in `app.js` is a JavaScript port of the Flask routes in `app.py`.
+
+Toolchain: Android Studio (or JDK 17 plus the Android SDK 35), Gradle 8.9 via the included wrapper, Android Gradle Plugin 8.7.3, Kotlin 2.0.21, minSdk 26, targetSdk/compileSdk 35.
+
+To rebuild, set `sdk.dir` in `android/local.properties` to your Android SDK path (or open the `android` folder in Android Studio), then:
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug
+```
+
+The APK is written to `android\app\build\outputs\apk\debug\app-debug.apk`.
+
+Third-party licenses and attribution (including the CC BY-SA chess piece images by Colin M.L. Burnett) are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+> **Note:** The desktop and Android versions share the PGN format, so a PGN file can be copied between `games/` on the PC and the phone, but the app's private storage is not directly accessible without adb or root. The Android app is not tested against an emulator or physical device in this repository's build environment; the web UI logic was verified in a desktop browser.
+
 ## Saved files
 
 | File | Purpose |
 |------|---------|
 | `app.py` | Flask application and embedded HTML/JavaScript interface |
+| `Radio-Chess_v1.apk` | Prebuilt Android version of the app |
+| `android/` | Android Studio / Gradle project source for the APK |
+| `THIRD_PARTY_NOTICES.md` | Licenses and attribution for bundled libraries and chess piece images |
 | `games/<game-id>.pgn` | One PGN file per saved game |
 | `games/active.txt` | ID of the game to reopen on startup |
 | `radio_games.pgn` | Legacy single-game save file, migrated when there are no saved game PGNs |

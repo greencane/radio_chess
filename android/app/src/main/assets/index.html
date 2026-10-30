@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radio Chess Tracker</title>
+
+  <link rel="stylesheet" href="lib/chessboard.min.css">
+  <script src="lib/jquery.min.js"></script>
+  <script src="lib/chessboard.min.js"></script>
+  <script src="lib/chess.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 12px; background: #f0f0f0; }
+    h2, h3 { text-align: center; margin: 0 0 8px; }
+    .app-container {
+      display: flex; max-width: 650px; margin: 0 auto;
+      background: white; padding: 16px; border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1); gap: 20px;
+      flex-wrap: wrap; justify-content: center;
+    }
+    .board-col { width: 100%; max-width: 400px; text-align: center; }
+    #myBoard { width: 100%; touch-action: none; }
+    .history-col {
+      width: 100%; max-width: 400px; background: #fafafa; border: 1px solid #ccc;
+      padding: 10px; border-radius: 4px; height: 220px; box-sizing: border-box;
+      overflow-y: auto; font-family: monospace; font-size: 16px;
+    }
+    .history-col h3 { font-family: sans-serif; }
+    .move-row { padding: 4px; border-bottom: 1px solid #eee; }
+    .controls { margin: 12px 0; display: flex; justify-content: center; gap: 10px; }
+    button { padding: 10px 14px; font-size: 15px; }
+    input[type="text"], select { padding: 8px; font-size: 15px; box-sizing: border-box; }
+    .row { margin-top: 6px; display: flex; gap: 6px; justify-content: center; }
+    .row input { flex: 1; min-width: 0; }
+    details { margin-top: 15px; text-align: left; }
+    summary { cursor: pointer; padding: 6px 0; }
+    .field { margin-top: 6px; display: flex; align-items: center; }
+    .field label { width: 64px; flex: none; }
+    .field input, .field select { flex: 1; min-width: 0; }
+  </style>
+</head>
+<body>
+  <h2>Radio Chess Station</h2>
+  <h3 id="gameTitle"></h3>
+  <div class="app-container">
+
+    <div class="board-col">
+      <div id="myBoard"></div>
+
+      <p><strong>Turn:</strong> <span id="turn"></span></p>
+
+      <div class="controls">
+        <button id="backBtn" type="button">&lt; Back</button>
+        <button id="forwardBtn" type="button">Forward &gt;</button>
+      </div>
+
+      <form id="moveForm" class="row" autocomplete="off">
+        <input type="text" id="moveInput" placeholder="e.g. e4, Nf3"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="submit">Manual Enter</button>
+      </form>
+
+      <hr>
+      <select id="gameSelect" style="width:100%; margin-bottom: 10px;"></select>
+
+      <form id="newForm" class="row">
+        <input type="text" id="newTitle" placeholder="Game name">
+        <input type="text" id="newOpponent" placeholder="Opponent/callsign">
+        <button type="submit">New Game</button>
+      </form>
+
+      <details>
+        <summary>Edit game details</summary>
+        <form id="headersForm"></form>
+      </details>
+
+      <button id="deleteBtn" type="button" style="color: red; margin-top: 15px;">Delete This Game</button>
+    </div>
+
+    <div class="history-col">
+      <h3 style="margin-top:0;">History</h3>
+      <div id="history"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
